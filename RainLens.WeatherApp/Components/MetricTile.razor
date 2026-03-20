@@ -1,0 +1,14 @@
+@using RainLens.WeatherApp.Models
+
+<div class="metric-tile">
+    <div class="metric-icon">@Metric.Icon</div>
+    <div>
+        <div class="metric-label">@Metric.Label</div>
+        <div class="metric-value">@Metric.Value</div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public required WeatherMetric Metric { get; set; }
+}

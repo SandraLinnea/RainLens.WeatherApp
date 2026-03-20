@@ -1,0 +1,62 @@
+@using RainLens.WeatherApp.Models
+
+<section class="glass-card section-card" id="@SectionId">
+    <div class="section-header">
+        <div>
+            <span class="eyebrow">@Eyebrow</span>
+            <h2>@Title</h2>
+        </div>
+        @if (!string.IsNullOrWhiteSpace(Detail))
+        {
+            <span class="section-detail">@Detail</span>
+        }
+    </div>
+
+    @if (Days is null)
+    {
+        <div class="forecast-list">
+            @for (var index = 0; index < 5; index++)
+            {
+                <div class="forecast-row skeleton-row"></div>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="forecast-list">
+            @foreach (var day in Days)
+            {
+                <div class="forecast-row">
+                    <div class="forecast-day">
+                        <span class="forecast-icon">@day.Icon</span>
+                        <div>
+                            <div class="forecast-label">@day.DayLabel</div>
+                            <div class="forecast-summary">@day.Summary</div>
+                        </div>
+                    </div>
+                    <div class="forecast-meta">
+                        <span>Rain @day.RainChance%</span>
+                        <strong>@day.MaxTempC&deg; / @day.MinTempC&deg;</strong>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter]
+    public string? SectionId { get; set; }
+
+    [Parameter, EditorRequired]
+    public required string Eyebrow { get; set; }
+
+    [Parameter, EditorRequired]
+    public required string Title { get; set; }
+
+    [Parameter]
+    public string? Detail { get; set; }
+
+    [Parameter]
+    public IReadOnlyList<ForecastDay>? Days { get; set; }
+}

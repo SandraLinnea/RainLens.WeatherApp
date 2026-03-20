@@ -1,0 +1,42 @@
+<section class="glass-card side-card">
+    <span class="eyebrow">@Eyebrow</span>
+    <h2>@Title</h2>
+    @if (!string.IsNullOrWhiteSpace(Description))
+    {
+        <p class="side-copy">@Description</p>
+    }
+
+    @if (Items.Count == 0)
+    {
+        <div class="empty-state">@EmptyMessage</div>
+    }
+    else
+    {
+        <div class="tag-list">
+            @foreach (var item in Items)
+            {
+                <button class="tag-pill" @onclick="() => OnSelect.InvokeAsync(item)">@item</button>
+            }
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired]
+    public required string Eyebrow { get; set; }
+
+    [Parameter, EditorRequired]
+    public required string Title { get; set; }
+
+    [Parameter, EditorRequired]
+    public required string Description { get; set; }
+
+    [Parameter, EditorRequired]
+    public required string EmptyMessage { get; set; }
+
+    [Parameter, EditorRequired]
+    public required IReadOnlyList<string> Items { get; set; }
+
+    [Parameter]
+    public EventCallback<string> OnSelect { get; set; }
+}

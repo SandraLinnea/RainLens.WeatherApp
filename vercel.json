@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "buildCommand": "dotnet publish RainLens.WeatherApp/RainLens.WeatherApp.csproj -c Release -o publish",
+  "outputDirectory": "publish/wwwroot",
+  "routes": [
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
+  ]
+}

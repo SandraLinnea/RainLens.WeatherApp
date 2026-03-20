@@ -1,0 +1,300 @@
+@page "/"
+@implements IDisposable
+@inject WeatherService WeatherService
+@inject BrowserStorageService StorageService
+
+<PageTitle>RainLens</PageTitle>
+
+<div class="dashboard-grid" id="dashboard">
+    <section class="glass-card hero-card">
+        <span class="eyebrow">RainLens Weather Dashboard</span>
+        <h1>Weather check in the world.</h1>
+        <p class="hero-copy">
+            Find out the weather where you are or are traveling to with a 5-day forecast.
+        </p>
+
+        <form class="search-form" @onsubmit="@(async _ => await HandleSubmitAsync())" @onsubmit:preventDefault>
+            <label for="city-search">City Search</label>
+            <div class="search-row">
+                <input id="city-search"
+                       class="search-input"
+                       @bind="searchQuery"
+                       @bind:event="oninput"
+                       placeholder="Stockholm" />
+                <button class="search-button" type="submit" disabled="@isSearching">
+                    @(isSearching ? "Loading..." : "View Weather")
+                </button>
+            </div>
+        </form>
+
+        @if (!string.IsNullOrWhiteSpace(errorMessage))
+        {
+            <p class="error-text">@errorMessage</p>
+        }
+
+        <p class="feature-copy">
+            Features: City Search, Live Weather Overview, 5-Day Forecast, Favorite Locations, Recent Searches.
+        </p>
+    </section>
+
+    <div class="side-stack">
+        <TagListCard Eyebrow="Recent Searches"
+                     Title="Jump back into earlier lookups"
+                     Description=""
+                     EmptyMessage="Your recent searches will appear here."
+                     Items="recentSearches"
+                     OnSelect="SelectCityAsync" />
+
+        <TagListCard Eyebrow="Favorite Locations"
+                     Title="Pin cities you check often"
+                     Description=""
+                     EmptyMessage="Press the star in Weather Overview to save it"
+                     Items="favoriteCities"
+                     OnSelect="SelectCityAsync" />
+    </div>
+</div>
+
+<section class="glass-card overview-card">
+    <div class="section-header">
+        <div>
+            <span class="eyebrow">Live Weather Overview</span>
+            @if (currentDashboard is null)
+            {
+                <h2>Loading your dashboard</h2>
+            }
+            else
+            {
+                <div class="city-heading">
+                    <h2>@currentDashboard.Location.Name</h2>
+                    <p class="location-subtitle">@currentDashboard.Location.Country</p>
+                </div>
+            }
+        </div>
+        <div class="overview-actions">
+            @if (currentDashboard is not null)
+            {
+                <button class="ghost-button icon-only-button" @onclick="ToggleFavoriteAsync" aria-label="Save or remove favorite city">
+                    @(isCurrentFavorite ? "\u2605" : "\u2606")
+                </button>
+            }
+            <span class="section-detail">Last updated: @(currentDashboard is null ? "--:--" : currentDashboard.UpdatedAt.ToLocalTime().ToString("HH:mm"))</span>
+        </div>
+    </div>
+
+    @if (currentDashboard is null || isSearching)
+    {
+        <div class="overview-skeleton">
+            <div class="skeleton-block skeleton-temperature"></div>
+            <div class="metric-grid">
+                @for (var index = 0; index < 4; index++)
+                {
+                    <div class="metric-tile skeleton-box"></div>
+                }
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="overview-content">
+            <div class="temperature-panel">
+                <div class="weather-icon">@currentDashboard.Current.Icon</div>
+                <div class="temperature-copy">
+                    <div class="temperature-reading">
+                        <div class="temperature-line">@currentDashboard.Current.TemperatureC&deg;</div>
+                        <div class="feels-like">Feels like @currentDashboard.Current.FeelsLikeC&deg;</div>
+                    </div>
+                    <p>@currentDashboard.Current.Summary moving through the city skyline.</p>
+                </div>
+            </div>
+
+            <div class="metric-grid">
+                @foreach (var metric in currentDashboard.Current.Metrics)
+                {
+                    <MetricTile Metric="metric" />
+                }
+            </div>
+        </div>
+    }
+</section>
+
+<div class="forecast-grid">
+    <ForecastPanel SectionId="forecast"
+                   Eyebrow="5-Day Forecast"
+                   Title="@($"The next 5 days in {currentDashboard?.Location.Name ?? "your city"}")"
+                   Days="currentDashboard?.Forecast" />
+
+    <ForecastPanel Eyebrow="Global Forecast"
+                   Title="@(globalDashboard?.Location.Name ?? "Loading city")"
+                   Detail="Updates every 5 seconds"
+                   Days="globalDashboard?.Forecast" />
+</div>
+
+<footer class="glass-card site-footer">
+    <div class="footer-left">
+        <p>&copy; 2026 Sandra Bjorklund.</p>
+        <a href="https://sandra-bjorklund.vercel.app/" target="_blank" rel="noopener noreferrer">Portfolio</a>
+    </div>
+</footer>
+
+@code {
+    private const string FavoritesStorageKey = "rainlens.favoriteCities";
+    private const string RecentSearchesStorageKey = "rainlens.recentSearches";
+    private readonly string[] globalCityPool =
+    [
+        "Paris",
+        "Tokyo",
+        "New York",
+        "Cape Town",
+        "Sydney",
+        "Rio de Janeiro",
+        "Reykjavik",
+        "Singapore"
+    ];
+
+    private readonly Random random = new();
+    private CancellationTokenSource? globalForecastCts;
+    private WeatherDashboardData? currentDashboard;
+    private WeatherDashboardData? globalDashboard;
+    private List<string> favoriteCities = [];
+    private List<string> recentSearches = [];
+    private string searchQuery = "Stockholm";
+    private string? errorMessage;
+    private bool isSearching;
+    private bool isCurrentFavorite;
+    private bool hasStarted;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || hasStarted)
+        {
+            return;
+        }
+
+        hasStarted = true;
+        favoriteCities = await StorageService.GetItemAsync<List<string>>(FavoritesStorageKey) ?? [];
+        recentSearches = await StorageService.GetItemAsync<List<string>>(RecentSearchesStorageKey) ?? [];
+
+        await SearchCityAsync(searchQuery, saveToRecent: false);
+        StartGlobalForecastLoop();
+        StateHasChanged();
+    }
+
+    private async Task HandleSubmitAsync()
+    {
+        await SearchCityAsync(searchQuery, saveToRecent: true);
+    }
+
+    private async Task SelectCityAsync(string city)
+    {
+        searchQuery = city;
+        await SearchCityAsync(city, saveToRecent: true);
+    }
+
+    private async Task SearchCityAsync(string city, bool saveToRecent)
+    {
+        if (string.IsNullOrWhiteSpace(city))
+        {
+            errorMessage = "Enter a city to see the latest weather.";
+            return;
+        }
+
+        isSearching = true;
+        errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            currentDashboard = await WeatherService.GetDashboardAsync(city.Trim());
+            isCurrentFavorite = favoriteCities.Contains(currentDashboard.Location.Name, StringComparer.OrdinalIgnoreCase);
+            searchQuery = currentDashboard.Location.Name;
+
+            if (saveToRecent)
+            {
+                recentSearches = AddDistinctCity(recentSearches, currentDashboard.Location.Name, 6);
+                await StorageService.SetItemAsync(RecentSearchesStorageKey, recentSearches);
+            }
+        }
+        catch
+        {
+            errorMessage = $"We couldn't find weather data for \"{city}\".";
+        }
+        finally
+        {
+            isSearching = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task ToggleFavoriteAsync()
+    {
+        if (currentDashboard is null)
+        {
+            return;
+        }
+
+        favoriteCities = AddDistinctCity(favoriteCities, currentDashboard.Location.Name, 8, moveToFront: !isCurrentFavorite);
+
+        if (isCurrentFavorite)
+        {
+            favoriteCities.RemoveAll(city => string.Equals(city, currentDashboard.Location.Name, StringComparison.OrdinalIgnoreCase));
+        }
+
+        isCurrentFavorite = !isCurrentFavorite;
+        await StorageService.SetItemAsync(FavoritesStorageKey, favoriteCities);
+    }
+
+    private void StartGlobalForecastLoop()
+    {
+        globalForecastCts = new CancellationTokenSource();
+        _ = RotateGlobalForecastAsync(globalForecastCts.Token);
+    }
+
+    private async Task RotateGlobalForecastAsync(CancellationToken cancellationToken)
+    {
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                var nextCity = globalCityPool[random.Next(globalCityPool.Length)];
+                globalDashboard = await WeatherService.GetDashboardAsync(nextCity, cancellationToken);
+                await InvokeAsync(StateHasChanged);
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
+            }
+            catch (TaskCanceledException)
+            {
+                break;
+            }
+        }
+    }
+
+    private static List<string> AddDistinctCity(List<string> source, string city, int limit, bool moveToFront = true)
+    {
+        var updated = source
+            .Where(item => !string.Equals(item, city, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (moveToFront)
+        {
+            updated.Insert(0, city);
+        }
+        else if (!updated.Contains(city, StringComparer.OrdinalIgnoreCase))
+        {
+            updated.Add(city);
+        }
+
+        return updated.Take(limit).ToList();
+    }
+
+    public void Dispose()
+    {
+        globalForecastCts?.Cancel();
+        globalForecastCts?.Dispose();
+    }
+}
