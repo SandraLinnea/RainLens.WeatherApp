@@ -61,3 +61,12 @@
 #*.PDF   diff=astextplain
 #*.rtf   diff=astextplain
 #*.RTF   diff=astextplain
+
+###############################################################################
+# GitHub Linguist overrides for Blazor repos
+###############################################################################
+*.razor linguist-language=C#
+*.cshtml linguist-language=C#
+bin/** linguist-generated=true
+obj/** linguist-generated=true
+RainLens.WeatherApp/wwwroot/lib/** linguist-vendored=true
