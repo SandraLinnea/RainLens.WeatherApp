@@ -27,4 +27,20 @@ RainLens is a modern weather dashboard built with Blazor WebAssembly and .NET, w
 
 ## Deployment
 
-The repo includes `vercel.json` configured to publish the Blazor WebAssembly app as a static site on Vercel with SPA fallback routing.
+RainLens deploys to Vercel through GitHub Actions because the Vercel Git build environment does not provide `dotnet` for this project.
+
+### Required GitHub secrets
+
+- `VERCEL_TOKEN`
+- `VERCEL_ORG_ID`
+- `VERCEL_PROJECT_ID`
+
+### Deployment flow
+
+1. GitHub Actions builds the Blazor WebAssembly app with .NET.
+2. The workflow creates a `.vercel/output` folder with the published static files.
+3. Vercel CLI deploys that prebuilt output with SPA fallback routing.
+
+### Important
+
+If your Vercel project is still connected for automatic Git-based deployments, disable those or disconnect the repository. Otherwise Vercel may still try to run its own build and fail before the GitHub Actions deployment takes over.
